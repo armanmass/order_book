@@ -1,15 +1,53 @@
 #pragma once
 #include "Order.h"
+#include "TradeInfo.h"
 
 #include <map>
-#include <deque>
+#include <unordered_map>
 
 class OrderBook {
     public:
-        static getInstance();
-        bool createOrder(Order::ID id, Order::Price price, Order::Quantity quantity);
-        bool cancelOrder(Order::ID id);
+        bool hasMatch(Side side, Price price) const {
+            if (side == Side::Buy)
+            {
+                if(!asks_.empty() && asks_.begin()->first <= price)
+                    return true;
+            }
+            else
+            {
+                if(!bids_.empty() && bids_.begin()->first <= price)
+                    return true;
+            }
+            return false;
+        }
+
+        Trades matchOrders(Side side, Price price) {
+            Trades trades;
+            if (!hasMatch(side, price))
+                return t;
+
+            if (side == Side::Buy)
+            {
+                while (!asks_.empty() && )
+            }
+            else
+            {
+
+            }
+            
+
+            return t;
+        }
+
     private:
-        map<Order::Price, std::deque<std::pair<Order::ID, Order::Quantity>>> bids;
-        map<Order::Price, std::deque<std::pair<Order::ID, Order::Quantity>>> asks;
-}
+        struct OrderEntry {
+            OrderPointer order_{ nullptr };
+            OrderPointers::iterator location_;
+        };
+        std::map<Price, OrderPointers, std::greater<Price>> bids_;
+        std::map<Price, OrderPointers, std::less<Price>> asks_;
+        // enable O(1) look up on bids/asks? store pointer to
+        // order id to not have to search map
+        std::unordered_map<OrderId, OrderEntry> orders_;
+
+};

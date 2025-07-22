@@ -1,7 +1,6 @@
 #pragma once
 #include "Order.h"
-
-using namespace Order;
+#include <vector>
 
 struct LevelInfo {
     Price price_;
@@ -16,11 +15,11 @@ class OrderbookLevelInfos {
             : asks_{ asks } , bids_{ bids } 
             { }
         
-        const LevelInfos& getAsks() const { return asks_ };
-        const LevelInfos& getBids() const { return bids_ };
+        const LevelInfos& getAsks() const { return asks_; };
+        const LevelInfos& getBids() const { return bids_; };
 
     private:
         LevelInfos bids_;
         LevelInfos asks_;
 
-}
+};

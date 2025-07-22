@@ -27,8 +27,10 @@ public:
     
     OrderType getOrderType() const { return orderType_; }
     OrderId getOrderID() const { return orderId_; }
+
     Side getSide() const { return side_; }
     Price getPrice() const { return price_; }
+
     Quantity getInitQuantity() const { return initQuantity_; }
     Quantity getRemQuantity() const { return remQuantity_; }
     Quantity getFilledQuantity() const { return initQuantity_ - remQuantity_; }
@@ -52,16 +54,3 @@ private:
 
 using OrderPointer = std::shared_ptr<Order>;
 using OrderPointers = std::list<OrderPointer>;
-
-class OrderModify {
-public:
-    OrderModify(OrderId orderId, Side side, Price price, Quantity quantity) :
-        orderId_{ orderId }, side_{ side }, price_{ price }, quantity_{ quantity }
-        {}
-private:
-    OrderId orderId_;
-    Side side_;
-    Price price_;
-    Quantity quantity_;
-
-};
