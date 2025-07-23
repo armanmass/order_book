@@ -1,5 +1,8 @@
 #include "OrderBook.h"
+#include "LevelInfo.h"
 #include "Order.h"
+#include "OrderModify.h"
+#include <numeric>
 
 Trades OrderBook::addOrder(OrderPointer order)
 {
@@ -29,26 +32,70 @@ Trades OrderBook::addOrder(OrderPointer order)
     return matchOrders();
 }
 
+
 void OrderBook::cancelOrder(OrderId orderId)
 {
-    if (orders_.contains(orderId))
+    if (!orders_.contains(orderId))
         return;
 
-    auto& [order, location] = orders_[orderId];
+    auto& [order, location] = orders_.at(orderId);
 
     if (order->getSide() == Side::Buy)
     {
         auto& bidsAtPrice = bids_[order->getPrice()];
         bidsAtPrice.erase(location);
+        if (bidsAtPrice.empty())
+            bids_.erase(order->getPrice());
     }
     else
     {
         auto& asksAtPrice  = asks_[order->getPrice()];
         asksAtPrice.erase(location);
+        if (asksAtPrice.empty())
+            asks_.erase(order->getPrice());
     }
 
     orders_.erase(orderId);
 }
+
+
+Trades OrderBook::modifyOrder(OrderModify modifiedOrder)
+{
+    if (!orders_.contains(modifiedOrder.getOrderID()))
+        return { };
+    
+    auto& [order, location] = orders_[modifiedOrder.getOrderID()];
+    auto ot = order->getOrderType();
+
+    cancelOrder(modifiedOrder.getOrderID());    
+    return addOrder(modifiedOrder.toOrderPointer(ot));
+}
+
+OrderbookLevelInfos OrderBook::getOrderInfos() const
+{
+    LevelInfos asks;
+    LevelInfos bids;
+
+    // lambda function will iterate over all prices in asks_ and bids_
+    // accumalte each list at each price level in each
+    // push back each level to the current level info vector
+    auto createLI = [](Price price, const OrderPointers& orders)
+    {
+        return LevelInfo{ price, std::accumulate(orders.begin(), orders.end(), Quantity{},
+                        [](Quantity totalQuantity, const OrderPointer& order){
+                            return totalQuantity + order->getRemQuantity();
+                        })};
+    };
+
+    for (const auto& [price, ordersAtPrice] : asks_)
+        asks.push_back(createLI(price, ordersAtPrice));
+
+    for (const auto& [price, ordersAtPrice] : bids_)
+        bids.push_back(createLI(price, ordersAtPrice));
+
+    return OrderbookLevelInfos{asks, bids};
+}
+
 
 bool OrderBook::hasMatch(Side side, Price price) const {
     if (side == Side::Buy)
@@ -63,6 +110,7 @@ bool OrderBook::hasMatch(Side side, Price price) const {
     }
     return false;
 }
+
 
 Trades OrderBook::matchOrders() {
     Trades trades;

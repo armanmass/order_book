@@ -1,15 +1,23 @@
 #pragma once
 #include "Order.h"
+#include "OrderModify.h"
 #include "TradeInfo.h"
+#include "LevelInfo.h"
 
 #include <map>
 #include <unordered_map>
+
+#include <cstddef>
 
 class OrderBook {
     public:
         Trades addOrder(OrderPointer order);
         void cancelOrder(OrderId orderId);
-        void modifyOrder(OrderId orderId, Quantity quantity, Price price);
+        Trades modifyOrder(OrderModify modifiedOrder);
+
+        OrderbookLevelInfos getOrderInfos() const;
+
+        std::size_t size() const { return orders_.size(); }
 
     private:
         bool hasMatch(Side side, Price price) const;
