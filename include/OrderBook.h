@@ -60,12 +60,11 @@ class OrderBook {
         void updateLevelData(Price price, Quantity quantity, LevelData::Action action);
 
 
+        std::unordered_map<Price, LevelData> data_;
+
         std::map<Price, OrderPointers, std::greater<Price>> bids_;
         std::map<Price, OrderPointers, std::less<Price>> asks_;
 
-        // enable O(1) look up on bids/asks store pointer to
-        // order id to not have to search map O(logn) --> O(1)
-        // cost of extra space
         std::unordered_map<OrderId, OrderEntry> orders_;
 
         mutable std::mutex ordersMutex_;

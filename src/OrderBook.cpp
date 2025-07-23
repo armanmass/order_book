@@ -63,33 +63,16 @@ Trades OrderBook::addOrder(OrderPointer order)
 
     orders_[order->getOrderID()] = OrderEntry { order, it };
 
+    onOrderAdded(order);
     return matchOrders();
 }
 
 
 void OrderBook::cancelOrder(OrderId orderId)
 {
-    if (!orders_.contains(orderId))
-        return;
+    std::scoped_lock ordersLock{ ordersMutex_ };
 
-    auto& [order, location] = orders_.at(orderId);
-
-    if (order->getSide() == Side::Buy)
-    {
-        auto& bidsAtPrice = bids_[order->getPrice()];
-        bidsAtPrice.erase(location);
-        if (bidsAtPrice.empty())
-            bids_.erase(order->getPrice());
-    }
-    else
-    {
-        auto& asksAtPrice  = asks_[order->getPrice()];
-        asksAtPrice.erase(location);
-        if (asksAtPrice.empty())
-            asks_.erase(order->getPrice());
-    }
-
-    orders_.erase(orderId);
+    cancelOrderInternal(orderId);
 }
 
 
@@ -167,7 +150,7 @@ void OrderBook::pruneGoodForDayOrders()
 
             for (const auto& [_, entry] : orders_)
             {
-                auto& [order, _] = entry;
+                auto& [order, __] = entry;
 
                 if (order->getOrderType() == OrderType::GoodForDay)
                     orderIds.push_back(order->getOrderID());
@@ -180,9 +163,76 @@ void OrderBook::pruneGoodForDayOrders()
 
 void OrderBook::cancelOrders(OrderIds orderIds)
 {
+    std::scoped_lock ordersLock{ ordersMutex_ };
+
     for (const auto& orderId : orderIds)
-        cancelOrder(orderId);
+        cancelOrderInternal(orderId);
 }
+
+void OrderBook::cancelOrderInternal(OrderId orderId)
+{
+    if (!orders_.contains(orderId))
+        return;
+
+    auto& [order, location] = orders_.at(orderId);
+
+    if (order->getSide() == Side::Buy)
+    {
+        auto& bidsAtPrice = bids_[order->getPrice()];
+        bidsAtPrice.erase(location);
+        if (bidsAtPrice.empty())
+            bids_.erase(order->getPrice());
+    }
+    else
+    {
+        auto& asksAtPrice  = asks_[order->getPrice()];
+        asksAtPrice.erase(location);
+        if (asksAtPrice.empty())
+            asks_.erase(order->getPrice());
+    }
+
+    orders_.erase(orderId);
+    onOrderCancelled(order);
+}
+
+void OrderBook::onOrderAdded(OrderPointer order)
+{
+    updateLevelData(order->getPrice(), order->getRemQuantity(), LevelData::Action::Add);
+}
+
+void OrderBook::onOrderCancelled(OrderPointer order)
+{
+    updateLevelData(order->getPrice(), order->getRemQuantity(), LevelData::Action::Remove);
+}
+void OrderBook::onOrderMatched(Price price, Quantity quantity, bool isFullyFilled)
+{
+    updateLevelData(price, quantity, isFullyFilled ? LevelData::Action::Remove : LevelData::Action::Match);
+}
+
+void OrderBook::updateLevelData(Price price, Quantity quantity, LevelData::Action action)
+{
+
+    const int change = action == LevelData::Action::Add ? 1 : action == LevelData::Action::Remove ? -1 : 0;
+    auto& data = data_[price];
+
+    data.count_ += change;
+
+    if (data.count_ == 0)
+    {
+        data_.erase(price);
+        return;
+    }
+    
+    if (action == LevelData::Action::Add)
+    {
+        data.quantity_ += quantity;
+    }
+    else
+    {
+        data.quantity_ -= quantity;
+    }
+}
+
 
 bool OrderBook::hasMatch(Side side, Price price) const {
     if (side == Side::Buy)
@@ -248,6 +298,9 @@ Trades OrderBook::matchOrders() {
                 TradeInfo { bid->getOrderID(), quantity, bid->getPrice()},
                 TradeInfo { ask->getOrderID(), quantity, ask->getPrice()}
             );
+
+            onOrderMatched(bid->getPrice(), quantity, bid->getRemQuantity() == 0);
+            onOrderMatched(ask->getPrice(), quantity, ask->getRemQuantity() == 0);
         }
 
         if (!asks_.empty())
