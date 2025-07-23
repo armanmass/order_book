@@ -14,7 +14,7 @@ class OrderBook {
     private:
         bool hasMatch(Side side, Price price) const;
 
-        Trades matchOrders(Side side, Price price);
+        Trades matchOrders();
 
         struct OrderEntry {
             OrderPointer order_{ nullptr };

@@ -9,22 +9,45 @@ Trades OrderBook::addOrder(OrderPointer order)
     if (order->getOrderType() == OrderType::FillAndKill && !hasMatch(order->getSide(), order->getPrice()))
         return { };
 
-    
+    OrderPointers::iterator it;
 
-   return { } ;
+    if (order->getSide() == Side::Buy)
+    {
+        auto& bidsAtPrice = bids_[order->getPrice()];
+        bidsAtPrice.push_back(order);
+        it = std::next(bidsAtPrice.begin(), bidsAtPrice.size() - 1);
+    }
+    else
+    {
+        auto& asksAtPrice = asks_[order->getPrice()];
+        asksAtPrice.push_back(order);
+        it = std::next(asksAtPrice.begin(), asksAtPrice.size() - 1);
+    }
+
+    orders_[order->getOrderID()] = OrderEntry { order, it };
+
+    return matchOrders();
 }
 
 void OrderBook::cancelOrder(OrderId orderId)
 {
-    auto it = orders_.find(orderId);
+    if (orders_.contains(orderId))
+        return;
 
-    if (it != orders_.end())
+    auto& [order, location] = orders_[orderId];
+
+    if (order->getSide() == Side::Buy)
     {
-        auto& [_, orderEntry] = *it;
-        auto side = 
-
-        orders_.erase(orderId);
+        auto& bidsAtPrice = bids_[order->getPrice()];
+        bidsAtPrice.erase(location);
     }
+    else
+    {
+        auto& asksAtPrice  = asks_[order->getPrice()];
+        asksAtPrice.erase(location);
+    }
+
+    orders_.erase(orderId);
 }
 
 bool OrderBook::hasMatch(Side side, Price price) const {
@@ -41,10 +64,9 @@ bool OrderBook::hasMatch(Side side, Price price) const {
     return false;
 }
 
-Trades OrderBook::matchOrders(Side side, Price price) {
+Trades OrderBook::matchOrders() {
     Trades trades;
-    if (!hasMatch(side, price))
-        return trades;
+
     while (true)
     {
         if (asks_.empty() || bids_.empty())
