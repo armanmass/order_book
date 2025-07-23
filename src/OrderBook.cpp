@@ -1,13 +1,47 @@
 #include "OrderBook.h"
-#include "LevelInfo.h"
 #include "Order.h"
-#include "OrderModify.h"
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
 #include <numeric>
+#include <time.h>
+
+OrderBook::OrderBook()
+    : ordersPruneThread_( [this] { pruneGoodForDayOrders(); })
+    { }
+
+OrderBook::~OrderBook()
+{
+    shutdown_.store(true, std::memory_order_release);
+    shutdownConditionVariable_.notify_one();
+    ordersPruneThread_.join();
+}
 
 Trades OrderBook::addOrder(OrderPointer order)
 {
+    std::scoped_lock ordersLock{ ordersMutex_ };
+
     if (orders_.contains(order->getOrderID()))
         return { };
+
+    if (order->getOrderType() == OrderType::Market)
+    {
+        if (order->getSide() == Side::Buy && !asks_.empty())
+        {
+            const auto& [highestSellPrice, _] = *asks_.rbegin();
+            order->toGoodTillCancel(highestSellPrice);
+        }
+        else if (order->getSide() == Side::Sell && !bids_.empty())
+        {
+            const auto& [lowestBuyPrice, _] = *bids_.rbegin();
+            order->toGoodTillCancel(lowestBuyPrice);
+        }
+        else
+        {
+            return { };
+        }
+    }
 
     if (order->getOrderType() == OrderType::FillAndKill && !hasMatch(order->getSide(), order->getPrice()))
         return { };
@@ -96,6 +130,59 @@ OrderbookLevelInfos OrderBook::getOrderInfos() const
     return OrderbookLevelInfos{asks, bids};
 }
 
+void OrderBook::pruneGoodForDayOrders()
+{
+    using namespace std::chrono;
+    const auto MarketClose = hours(13);
+
+    while (true)
+    {
+        const auto now = system_clock::to_time_t(system_clock::now());
+        std::tm time_info;
+        localtime_r(&now, &time_info);
+
+        if (time_info.tm_hour >= MarketClose.count())
+            ++time_info.tm_mday;
+
+        time_info.tm_hour = MarketClose.count();
+        time_info.tm_min = 0;
+        time_info.tm_sec = 0;
+
+        auto next = system_clock::from_time_t(mktime(&time_info));
+        auto time_rem = next - system_clock::from_time_t(now) + seconds(1);
+
+        {
+            std::unique_lock ordersLock{ ordersMutex_ };
+            
+            if (shutdown_.load(std::memory_order_acquire) ||
+                shutdownConditionVariable_.wait_for(ordersLock, time_rem) == std::cv_status::no_timeout)
+                    return;
+        }
+
+        OrderIds orderIds;
+
+
+        {
+            std::scoped_lock ordersLock{ ordersMutex_ };
+
+            for (const auto& [_, entry] : orders_)
+            {
+                auto& [order, _] = entry;
+
+                if (order->getOrderType() == OrderType::GoodForDay)
+                    orderIds.push_back(order->getOrderID());
+            }
+        }
+
+        cancelOrders(orderIds);
+    }
+}
+
+void OrderBook::cancelOrders(OrderIds orderIds)
+{
+    for (const auto& orderId : orderIds)
+        cancelOrder(orderId);
+}
 
 bool OrderBook::hasMatch(Side side, Price price) const {
     if (side == Side::Buy)
