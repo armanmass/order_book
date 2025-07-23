@@ -1,5 +1,18 @@
-#include "../include/OrderBook.h"
+#include "OrderBook.h"
+#include "Order.h"
 
+Trades OrderBook::addOrder(OrderPointer order)
+{
+    if (orders_.contains(order->getOrderID()))
+        return { };
+
+    if (order->getOrderType() == OrderType::FillAndKill && !hasMatch(order->getSide(), order->getPrice()))
+        return { };
+
+    
+
+   return { } ;
+}
 
 void OrderBook::cancelOrder(OrderId orderId)
 {
@@ -7,7 +20,10 @@ void OrderBook::cancelOrder(OrderId orderId)
 
     if (it != orders_.end())
     {
-        
+        auto& [_, orderEntry] = *it;
+        auto side = 
+
+        orders_.erase(orderId);
     }
 }
 
@@ -25,7 +41,7 @@ bool OrderBook::hasMatch(Side side, Price price) const {
     return false;
 }
 
-Trades matchOrders(Side side, Price price) {
+Trades OrderBook::matchOrders(Side side, Price price) {
     Trades trades;
     if (!hasMatch(side, price))
         return trades;

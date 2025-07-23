@@ -7,8 +7,8 @@
 
 class OrderBook {
     public:
+        Trades addOrder(OrderPointer order);
         void cancelOrder(OrderId orderId);
-        void addOrder(OrderId orderId, Quantity quantity, Price price);
         void modifyOrder(OrderId orderId, Quantity quantity, Price price);
 
     private:
