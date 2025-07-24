@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <numeric>
+#include <stdexcept>
 #include <time.h>
 
 OrderBook::OrderBook()
@@ -23,7 +24,7 @@ Trades OrderBook::addOrder(OrderPointer order)
     std::scoped_lock ordersLock{ ordersMutex_ };
 
     if (orders_.contains(order->getOrderID()))
-        return { };
+        throw std::logic_error("Duplicate Order IDs.");
 
     if (order->getOrderType() == OrderType::Market)
     {
@@ -44,6 +45,9 @@ Trades OrderBook::addOrder(OrderPointer order)
     }
 
     if (order->getOrderType() == OrderType::FillAndKill && !hasMatch(order->getSide(), order->getPrice()))
+        return { };
+
+    if (order->getOrderType() == OrderType::FillOrKill && !canFullyFill(order->getSide(), order->getPrice(), order->getRemQuantity()))
         return { };
 
     OrderPointers::iterator it;
