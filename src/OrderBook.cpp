@@ -82,6 +82,8 @@ void OrderBook::cancelOrder(OrderId orderId)
 
 Trades OrderBook::modifyOrder(OrderModify modifiedOrder)
 {
+    std::scoped_lock ordersLock{ ordersMutex_ };
+
     if (!orders_.contains(modifiedOrder.getOrderID()))
         return { };
     

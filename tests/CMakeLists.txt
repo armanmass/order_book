@@ -1,22 +1,14 @@
 find_package(GTest REQUIRED)
 
-add_executable
-(
+add_executable(
     OrderBookTests
     OrderBook_test.cpp
 )
 
-target_link_libraries
-(
+target_link_libraries(
     OrderBookTests
     PRIVATE
-    main_executable
-)
-
-target_link_libraries
-(
-    OrderBookTests
-    PRIVATE
+    OrderBookLib
     GTest::gtest
     GTest::gtest_main
 )
