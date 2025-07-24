@@ -248,6 +248,33 @@ bool OrderBook::hasMatch(Side side, Price price) const {
     return false;
 }
 
+bool OrderBook::canFullyFill(Side side, Price price, Quantity quantity) const
+{
+    std::scoped_lock ordersLock{ ordersMutex_ };
+
+    auto price_iterator = side == Side::Buy ? asks_.begin() : bids_.begin();
+    auto end            = side == Side::Buy ? asks_.end()   : bids_.end();
+
+    while (price_iterator != end)
+    {
+        const auto& [it_price, _] = *price_iterator;
+
+        if ( (side == Side::Buy && it_price > price) ||
+             (side == Side::Sell && it_price < price) )
+                break;
+
+        const auto& levelData = data_.at(it_price);
+
+        if (quantity <= levelData.quantity_)
+            return true;
+        quantity -= levelData.quantity_;
+
+        ++price_iterator;
+    }
+
+    return false;
+}
+
 
 Trades OrderBook::matchOrders() {
     Trades trades;

@@ -49,6 +49,8 @@ class OrderBook {
         bool hasMatch(Side side, Price price) const;
         Trades matchOrders();
 
+        bool canFullyFill(Side side, Price price, Quantity quantity) const;
+
         void pruneGoodForDayOrders();
 
         void cancelOrders(OrderIds orderIds);
