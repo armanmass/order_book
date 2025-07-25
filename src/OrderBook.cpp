@@ -23,6 +23,16 @@ Trades OrderBook::addOrder(OrderPointer order)
 {
     std::scoped_lock ordersLock{ ordersMutex_ };
 
+    if (!addOrderCoreLogic(order))
+    {
+        return { };
+    }
+
+    return matchOrders();
+}
+
+bool OrderBook::addOrderCoreLogic(OrderPointer order)
+{
     if (orders_.contains(order->getOrderID()))
         throw std::logic_error("Duplicate Order IDs.");
 
@@ -40,15 +50,15 @@ Trades OrderBook::addOrder(OrderPointer order)
         }
         else
         {
-            return { };
+            return false;
         }
     }
 
     if (order->getOrderType() == OrderType::FillAndKill && !hasMatch(order->getSide(), order->getPrice()))
-        return { };
+        return false;
 
     if (order->getOrderType() == OrderType::FillOrKill && !canFullyFill(order->getSide(), order->getPrice(), order->getRemQuantity()))
-        return { };
+        return false;
 
     OrderPointers::iterator it;
 
@@ -68,7 +78,7 @@ Trades OrderBook::addOrder(OrderPointer order)
     orders_[order->getOrderID()] = OrderEntry { order, it };
 
     onOrderAdded(order);
-    return matchOrders();
+    return true;
 }
 
 
@@ -90,8 +100,15 @@ Trades OrderBook::modifyOrder(OrderModify modifiedOrder)
     auto& [order, location] = orders_[modifiedOrder.getOrderID()];
     auto ot = order->getOrderType();
 
-    cancelOrder(modifiedOrder.getOrderID());    
-    return addOrder(modifiedOrder.toOrderPointer(ot));
+    cancelOrderInternal(modifiedOrder.getOrderID());    
+    auto newOrder = modifiedOrder.toOrderPointer(ot);
+
+    if (!addOrderCoreLogic(newOrder))
+    {
+        return { };
+    }
+
+    return matchOrders();
 }
 
 OrderbookLevelInfos OrderBook::getOrderInfos() const
@@ -124,8 +141,11 @@ void OrderBook::pruneGoodForDayOrders()
     using namespace std::chrono;
     const auto MarketClose = hours(13);
 
-    while (true)
+
+    while (!shutdown_.load(std::memory_order_acquire))
     {
+        std::unique_lock ordersLock{ ordersMutex_ };
+        
         const auto now = system_clock::to_time_t(system_clock::now());
         std::tm time_info;
         localtime_r(&now, &time_info);
@@ -138,32 +158,32 @@ void OrderBook::pruneGoodForDayOrders()
         time_info.tm_sec = 0;
 
         auto next = system_clock::from_time_t(mktime(&time_info));
-        auto time_rem = next - system_clock::from_time_t(now) + seconds(1);
+        auto time_rem = next - system_clock::from_time_t(now) + milliseconds(50);
 
+        // if we wake up randomly (we didn't time out) then continue
+        if (shutdownConditionVariable_.wait_for(ordersLock, time_rem,
+            [this] {
+                return shutdown_.load(std::memory_order_acquire);
+            }))
         {
-            std::unique_lock ordersLock{ ordersMutex_ };
-            
-            if (shutdown_.load(std::memory_order_acquire) ||
-                shutdownConditionVariable_.wait_for(ordersLock, time_rem) == std::cv_status::no_timeout)
-                    return;
+           continue;
         }
 
         OrderIds orderIds;
 
-
         {
-            std::scoped_lock ordersLock{ ordersMutex_ };
-
-            for (const auto& [_, entry] : orders_)
+            for (const auto& [orderId, entry] : orders_)
             {
-                auto& [order, __] = entry;
-
-                if (order->getOrderType() == OrderType::GoodForDay)
-                    orderIds.push_back(order->getOrderID());
+                if (entry.order_->getOrderType() == OrderType::GoodForDay)
+                    orderIds.push_back(orderId);
             }
         }
 
-        cancelOrders(orderIds);
+        // cancelOrders(orderIds);
+        // changed lock scope this creates duplicate code
+        // there must be better practice for this
+        for (const auto& orderId : orderIds)
+            cancelOrderInternal(orderId);
     }
 }
 
@@ -256,8 +276,6 @@ bool OrderBook::hasMatch(Side side, Price price) const {
 
 bool OrderBook::canFullyFill(Side side, Price price, Quantity quantity) const
 {
-    std::scoped_lock ordersLock{ ordersMutex_ };
-
     auto price_iterator = side == Side::Buy ? asks_.begin() : bids_.begin();
     auto end            = side == Side::Buy ? asks_.end()   : bids_.end();
 
@@ -288,15 +306,14 @@ Trades OrderBook::matchOrders() {
     while (true)
     {
         if (asks_.empty() || bids_.empty())
-            return trades;
+            break;
 
         // get lists based off price priority
         auto& [askPrice, lowestAsks] = *asks_.begin();
         auto& [bidPrice, highestBids] = *bids_.begin();
 
         if (askPrice > bidPrice)
-            return trades;
-
+            break;
 
         // parse lists base off temporal priority
         while (!lowestAsks.empty() && !highestBids.empty())
@@ -321,12 +338,6 @@ Trades OrderBook::matchOrders() {
                 orders_.erase(bid->getOrderID());
             }
 
-            if (lowestAsks.empty())
-                asks_.erase(askPrice);
-
-            if (highestBids.empty())
-                bids_.erase(bidPrice);
-
             trades.emplace_back(
                 TradeInfo { bid->getOrderID(), quantity, bid->getPrice()},
                 TradeInfo { ask->getOrderID(), quantity, ask->getPrice()}
@@ -335,23 +346,34 @@ Trades OrderBook::matchOrders() {
             onOrderMatched(bid->getPrice(), quantity, bid->getRemQuantity() == 0);
             onOrderMatched(ask->getPrice(), quantity, ask->getRemQuantity() == 0);
         }
-
-        if (!asks_.empty())
+        if (lowestAsks.empty())
         {
-            auto& [_, asks] = *asks_.begin();
-            auto& order = asks.front();
-            if (order->getOrderType() == OrderType::FillAndKill)
-                cancelOrder(order->getOrderID());
+            asks_.erase(askPrice);
+            data_.erase(askPrice);
         }
 
-        if (!bids_.empty())
+        if (highestBids.empty())
         {
-            auto& [_, bids] = *bids_.begin();
-            auto& order = bids.front();
-            if (order->getOrderType() == OrderType::FillAndKill)
-                cancelOrder(order->getOrderID());
+            bids_.erase(bidPrice);
+            data_.erase(bidPrice);
         }
-
     }
+
+    if (!asks_.empty())
+    {
+        auto& [_, asks] = *asks_.begin();
+        auto& order = asks.front();
+        if (order->getOrderType() == OrderType::FillAndKill)
+            cancelOrderInternal(order->getOrderID());
+    }
+
+    if (!bids_.empty())
+    {
+        auto& [_, bids] = *bids_.begin();
+        auto& order = bids.front();
+        if (order->getOrderType() == OrderType::FillAndKill)
+            cancelOrderInternal(order->getOrderID());
+    }
+
     return trades;
 }

@@ -24,6 +24,8 @@ class OrderBook {
         void operator=(const OrderBook&&) = delete;
 
         Trades addOrder(OrderPointer order);
+        bool addOrderCoreLogic(OrderPointer order);
+
         void cancelOrder(OrderId orderId);
         Trades modifyOrder(OrderModify modifiedOrder);
 
