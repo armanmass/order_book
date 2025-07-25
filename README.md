@@ -17,8 +17,6 @@ Ensure you have a C++20 compatible compiler (like GCC 13+ or Clang 18+) and CMak
 
 ### Step 3: Build the Project
 
-This will build the `OrderBookLib` static library and the `OrderBookTests` executable.
-
 ```bash
 mkdir build
 cd build
@@ -28,14 +26,12 @@ make
 
 ### Step 4: Run the Tests
 
-After a successful build, you can run the unit tests to verify all functionality is working as expected.
-
 ```bash
 # From the 'build' directory
 ./tests/OrderBookTests
 ```
 
-You should see output indicating that all tests have passed:
+Expected output:
 
 ```
 [==========] Running 9 tests from 1 test suite.
@@ -63,11 +59,8 @@ You should see output indicating that all tests have passed:
 
 ## Usage
 
-This project builds a library that you can link against in your own C++ applications.
 
-Here is an example of how to include `OrderBook` in your project.
-
-**`my_app.cpp`:**
+Example usage:
 
 ```cpp
 #include "OrderBook.h"
