@@ -65,7 +65,8 @@ Example usage:
 ```cpp
 #include "OrderBook.h"
 
-int main() {
+int main(int argc, char** argv)
+{
     // 1. Create an OrderBook instance
     OrderBook book;
 
