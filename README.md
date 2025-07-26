@@ -1,6 +1,6 @@
 # Order Book
 
-A high-performance, multi-threaded C++20 implementation of a financial limit order book.
+A high-performance, multi-threaded, C++20 implementation financial limit order book.
 
 ## Building and Running
 
