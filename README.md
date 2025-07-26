@@ -8,7 +8,6 @@ A high-performance, multi-threaded, C++20 implementation financial limit order b
 
 ```bash
 git clone https://github.com/armanmass/order_book.git
-cd OrderBook
 ```
 
 ### Step 2: Prerequisites
