@@ -1,8 +1,8 @@
 #include "gtest/gtest.h"
 #include <memory>
 #include <stdexcept>
-#include "Order.h"
-#include "OrderBook.h"
+#include "Order.hpp"
+#include "OrderBook.hpp"
 
 using namespace ::testing;
 
