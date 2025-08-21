@@ -25,7 +25,6 @@ cmake --build --preset conan-release
 ### Step 4: Run the Tests
 
 ```bash
-# From the 'build' directory
 ./build/Release/tests/OrderBookTests
 ```
 
