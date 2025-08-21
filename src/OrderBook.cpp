@@ -1,12 +1,5 @@
 #include "OrderBook.h"
-#include "Order.h"
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <mutex>
 #include <numeric>
-#include <stdexcept>
-#include <time.h>
 
 OrderBook::OrderBook()
     : ordersPruneThread_( [this] { pruneGoodForDayOrders(); })
@@ -148,7 +141,11 @@ void OrderBook::pruneGoodForDayOrders()
         
         const auto now = system_clock::to_time_t(system_clock::now());
         std::tm time_info;
-        localtime_r(&now, &time_info);
+        #ifdef _WIN32
+            localtime_s(&time_info, &now);
+        #else
+            localtime_r(&now, &time_info);
+        #endif
 
         if (time_info.tm_hour >= MarketClose.count())
             ++time_info.tm_mday;
@@ -171,12 +168,10 @@ void OrderBook::pruneGoodForDayOrders()
 
         OrderIds orderIds;
 
+        for (const auto& [orderId, entry] : orders_)
         {
-            for (const auto& [orderId, entry] : orders_)
-            {
-                if (entry.order_->getOrderType() == OrderType::GoodForDay)
-                    orderIds.push_back(orderId);
-            }
+            if (entry.order_->getOrderType() == OrderType::GoodForDay)
+                orderIds.push_back(orderId);
         }
 
         // cancelOrders(orderIds);
@@ -346,6 +341,7 @@ Trades OrderBook::matchOrders() {
             onOrderMatched(bid->getPrice(), quantity, bid->getRemQuantity() == 0);
             onOrderMatched(ask->getPrice(), quantity, ask->getRemQuantity() == 0);
         }
+
         if (lowestAsks.empty())
         {
             asks_.erase(askPrice);

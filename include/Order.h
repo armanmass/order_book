@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <memory>
 #include <list>
+#include <vector>
 
 using OrderId  = std::uint64_t;
 using Price    = std::int64_t;

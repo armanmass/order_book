@@ -2,10 +2,6 @@ cmake_minimum_required(VERSION 4.1)
 
 project(OrderBook)
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 add_library(
     OrderBookLib
     src/OrderBook.cpp
@@ -18,12 +14,12 @@ target_include_directories(
 )
 
 add_executable(
-    main_executable
+    main_exe
     src/main.cpp
 )
 
 target_link_libraries(
-    main_executable
+    main_exe
     PRIVATE
     OrderBookLib
 )
