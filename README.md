@@ -12,22 +12,21 @@ git clone https://github.com/armanmass/order_book.git
 
 ### Step 2: Prerequisites
 
-Ensure you have a C++20 compatible compiler (like GCC 13+ or Clang 18+) and CMake (3.10+) installed.
+Ensure you have a C++23 compatible compiler, CMake (4.10+), and conan installed.
 
 ### Step 3: Build the Project
 
 ```bash
-mkdir build
-cd build
-cmake ..
-make
+conan install .
+cmake --preset conan-release
+cmake --build --preset conan-release
 ```
 
 ### Step 4: Run the Tests
 
 ```bash
 # From the 'build' directory
-./tests/OrderBookTests
+./build/Release/tests/OrderBookTests
 ```
 
 Expected output:
@@ -62,7 +61,7 @@ Expected output:
 Example usage:
 
 ```cpp
-#include "OrderBook.h"
+#include "OrderBook.hpp"
 
 int main(int argc, char** argv)
 {
